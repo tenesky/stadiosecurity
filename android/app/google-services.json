@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "2092545885",
+    "project_id": "pss-security-f6aa8",
+    "storage_bucket": "pss-security-f6aa8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2092545885:android:fadd66d2c04f8c5fc35ab4",
+        "android_client_info": {
+          "package_name": "com.example.pss"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxOm9WWsAeIJlPnQJio95BGwfJFwt8Q3E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
