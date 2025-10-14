@@ -31,6 +31,5 @@ flutter_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/service-account-key.json
     - assets/pss_logo.png
     - uploads/
