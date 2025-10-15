@@ -11,17 +11,20 @@ dependencies:
     sdk: flutter
   mysql1: ^0.20.0
   crypto: ^3.0.1
-  http: ^0.13.6
+  http: ^0.13.5
   file_picker: 5.2.11
-  firebase_core: 4.1.1
-  firebase_storage: 13.0.2
-  pdfrx: 2.2.0
-  googleapis_auth: 1.4.1
+  firebase_core: ^4.1.1
+  firebase_storage: ^13.0.2
+  pdfrx: ^2.1.25
+  googleapis_auth: ^1.2.0
 
 dev_dependencies:
-  flutter_launcher_icons: 0.13.1
+  flutter_launcher_icons: ^0.13.1
   flutter_test:
     sdk: flutter
+
+dependency_overrides:
+  win32: 3.1.4   # <-- Fix für Dart 2.18
 
 flutter_icons:
   android: true
