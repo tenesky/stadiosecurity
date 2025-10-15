@@ -7,7 +7,8 @@ import '../services/db_service.dart';
 /// current and future based on their start and end times.  When
 /// creating or editing an event, a comprehensive form is presented
 /// allowing entry of key details such as the event name, schedule,
-/// participating clubs, security category and expected spectators.  A
+/// participating clubs, security category, expected spectators and
+/// additional metadata like season, competition and kickoff time.  A
 /// multi‑selection of roles determines which roles are associated with
 /// the event.
 class EventPage extends StatefulWidget {
@@ -44,7 +45,10 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
   /// Opens a dialog to create a new event or edit an existing one.  When
   /// editing, the provided [event] map contains the current values and
   /// selected roles.  On save, the event is persisted to the database and
-  /// the list refreshed.
+  /// the list refreshed.  This form supports additional fields such as
+  /// season, competition, matchday (for Regionalliga Nordost), kickoff
+  /// time, numbers of area leaders and security personnel, and other
+  /// information.
   Future<void> _showEventForm({Map<String, dynamic>? event}) async {
     final bool isEditing = event != null;
     // Controllers for text fields
@@ -107,6 +111,52 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
       });
     }
 
+    // Controllers and state for new fields
+    // Compute a list of seasons: current season and previous two seasons.
+    List<String> seasonsList() {
+      final now = DateTime.now();
+      int startYear = now.month >= 7 ? now.year : now.year - 1;
+      return List<String>.generate(3, (index) {
+        final year = startYear - index;
+        final nextYearShort = (year + 1) % 100;
+        return '${year}/${nextYearShort.toString().padLeft(2, '0')}';
+      });
+    }
+    String? selectedSeason = event?['season'] as String?;
+    final List<String> seasonOptions = seasonsList();
+    selectedSeason ??= seasonOptions.isNotEmpty ? seasonOptions.first : null;
+
+    // Competition selection
+    String? selectedCompetition = event?['competition'] as String?;
+    final List<String> competitionOptions = [
+      'Regionalliga Nordost',
+      'Sachsenpokal',
+      'Freundschaftsspiel',
+    ];
+    selectedCompetition ??= competitionOptions.first;
+
+    // Matchday selection
+    int? selectedMatchday = event?['matchday'] as int?;
+
+    // Kickoff time as TimeOfDay
+    TimeOfDay? kickoffTime;
+    if (event != null && event['kickoff_time'] != null) {
+      final DateTime dt = event['kickoff_time'] as DateTime;
+      kickoffTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+    }
+
+    // Controllers for numeric inputs
+    final TextEditingController areaLeadersController = TextEditingController(
+        text: event?['num_area_leaders'] != null ? (event!['num_area_leaders']).toString() : '');
+    final TextEditingController securityController = TextEditingController(
+        text: event?['num_security'] != null ? (event!['num_security']).toString() : '');
+
+    // Controller for additional info
+    final TextEditingController otherInfoController = TextEditingController(text: event?['other_info'] ?? '');
+
+    // Local saving state for showing a loading indicator while persisting
+    bool isSaving = false;
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -116,234 +166,397 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
             return AlertDialog(
               scrollable: true,
               title: Text(isEditing ? 'Veranstaltung bearbeiten' : 'Veranstaltung erstellen'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Bezeichnung'),
-                  ),
-                  const SizedBox(height: 8),
-                  // Stadium selection
-                  DropdownButtonFormField<int>(
-                    value: selectedStadiumId,
-                    decoration: const InputDecoration(labelText: 'Stadion (optional)'),
-                    items: stadiums
-                        .map(
-                          (stadium) => DropdownMenuItem<int>(
-                            value: stadium['id'] as int,
-                            child: Text(stadium['name'] as String),
+              content: StatefulBuilder(
+                builder: (context, setStateInner) {
+                  return Stack(
+                    children: [
+                      AbsorbPointer(
+                        absorbing: isSaving,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: nameController,
+                              decoration: const InputDecoration(labelText: 'Bezeichnung*'),
+                            ),
+                            const SizedBox(height: 8),
+                            // Season selection
+                            DropdownButtonFormField<String>(
+                              value: selectedSeason,
+                              decoration: const InputDecoration(labelText: 'Saison*'),
+                              items: seasonOptions
+                                  .map(
+                                    (season) => DropdownMenuItem<String>(
+                                      value: season,
+                                      child: Text(season),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setStateInner(() {
+                                  selectedSeason = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            // Competition selection
+                            DropdownButtonFormField<String>(
+                              value: selectedCompetition,
+                              decoration: const InputDecoration(labelText: 'Wettbewerb*'),
+                              items: competitionOptions
+                                  .map(
+                                    (comp) => DropdownMenuItem<String>(
+                                      value: comp,
+                                      child: Text(comp),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setStateInner(() {
+                                  selectedCompetition = value;
+                                  if (selectedCompetition != 'Regionalliga Nordost') {
+                                    selectedMatchday = null;
+                                  }
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            // Matchday when Regionalliga Nordost
+                            if (selectedCompetition == 'Regionalliga Nordost')
+                              DropdownButtonFormField<int>(
+                                value: selectedMatchday,
+                                decoration: const InputDecoration(labelText: 'Spieltag*'),
+                                items: List<int>.generate(38, (index) => index + 1)
+                                    .map((day) => DropdownMenuItem<int>(
+                                          value: day,
+                                          child: Text(day.toString()),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  setStateInner(() {
+                                    selectedMatchday = value;
+                                  });
+                                },
+                              ),
+                            if (selectedCompetition == 'Regionalliga Nordost') const SizedBox(height: 8),
+                            // Stadium selection
+                            DropdownButtonFormField<int>(
+                              value: selectedStadiumId,
+                              decoration: const InputDecoration(labelText: 'Stadion (optional)'),
+                              items: stadiums
+                                  .map((stadium) => DropdownMenuItem<int>(
+                                        value: stadium['id'] as int,
+                                        child: Text(stadium['name'] as String),
+                                      ))
+                                  .toList(),
+                              onChanged: (val) {
+                                setStateInner(() {
+                                  selectedStadiumId = val;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            // Start time picker
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(startDateTime != null
+                                      ? 'Start*: ${_formatDateTime(startDateTime!)}'
+                                      : 'Startzeit wählen'),
+                                ),
+                                TextButton(
+                                  onPressed: () => pickDateTime(isStart: true, setStateDialog: setStateInner),
+                                  child: const Text('Auswählen'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // End time picker
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(endDateTime != null
+                                      ? 'Ende*: ${_formatDateTime(endDateTime!)}'
+                                      : 'Endzeit wählen'),
+                                ),
+                                TextButton(
+                                  onPressed: () => pickDateTime(isStart: false, setStateDialog: setStateInner),
+                                  child: const Text('Auswählen'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Kickoff time picker
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(kickoffTime != null
+                                      ? 'Anstoß*: ${kickoffTime!.format(context)}'
+                                      : 'Anstoßzeit wählen'),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final time = await showTimePicker(
+                                      context: context,
+                                      initialTime: kickoffTime ?? TimeOfDay.now(),
+                                    );
+                                    if (time != null) {
+                                      setStateInner(() {
+                                        kickoffTime = time;
+                                      });
+                                    }
+                                  },
+                                  child: const Text('Auswählen'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: securityCategoryController,
+                              decoration: const InputDecoration(labelText: 'Sicherheitskategorie'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: totalSpectatorsController,
+                              decoration: const InputDecoration(labelText: 'Gesamtzuschauer'),
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: homeSupportersController,
+                              decoration: const InputDecoration(labelText: 'Zuschauer Heim'),
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: awaySupportersController,
+                              decoration: const InputDecoration(labelText: 'Zuschauer Gast'),
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 8),
+                            // Numbers of area leaders and security
+                            TextField(
+                              controller: areaLeadersController,
+                              decoration: const InputDecoration(labelText: 'Anzahl Bereichsleiter'),
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: securityController,
+                              decoration: const InputDecoration(labelText: 'Anzahl Security'),
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: eventLeaderController,
+                              decoration: const InputDecoration(labelText: 'Einsatzleiter'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: eventLeaderPhoneController,
+                              decoration: const InputDecoration(labelText: 'Telefon Einsatzleiter'),
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: eventLeaderEmailController,
+                              decoration: const InputDecoration(labelText: 'E-Mail Einsatzleiter'),
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: homeClubController,
+                              decoration: const InputDecoration(labelText: 'Heimverein'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: awayClubController,
+                              decoration: const InputDecoration(labelText: 'Gastverein'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: descriptionController,
+                              decoration: const InputDecoration(labelText: 'Beschreibung'),
+                              maxLines: 3,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: otherInfoController,
+                              decoration: const InputDecoration(labelText: 'Sonstige Informationen'),
+                              maxLines: 3,
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Rollen zuweisen',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Column(
+                              children: roles.map((role) {
+                                final int roleId = role['id'] as int;
+                                return CheckboxListTile(
+                                  title: Text(role['name'] as String),
+                                  value: selectedRoleIds.contains(roleId),
+                                  onChanged: (bool? checked) {
+                                    setStateInner(() {
+                                      if (checked == true) {
+                                        if (!selectedRoleIds.contains(roleId)) {
+                                          selectedRoleIds.add(roleId);
+                                        }
+                                      } else {
+                                        selectedRoleIds.remove(roleId);
+                                      }
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Loading overlay
+                      if (isSaving)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black45,
+                            child: const Center(child: CircularProgressIndicator()),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (val) {
-                      setStateDialog(() {
-                        selectedStadiumId = val;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  // Start time picker
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(startDateTime != null
-                            ? 'Start: ${_formatDateTime(startDateTime!)}'
-                            : 'Startzeit wählen'),
-                      ),
-                      TextButton(
-                        onPressed: () => pickDateTime(isStart: true, setStateDialog: setStateDialog),
-                        child: const Text('Auswählen'),
-                      ),
+                        ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  // End time picker
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(endDateTime != null
-                            ? 'Ende: ${_formatDateTime(endDateTime!)}'
-                            : 'Endzeit wählen'),
-                      ),
-                      TextButton(
-                        onPressed: () => pickDateTime(isStart: false, setStateDialog: setStateDialog),
-                        child: const Text('Auswählen'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: securityCategoryController,
-                    decoration: const InputDecoration(labelText: 'Sicherheitskategorie'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: totalSpectatorsController,
-                    decoration: const InputDecoration(labelText: 'Gesamtzuschauer (erwartet)'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: homeSupportersController,
-                    decoration: const InputDecoration(labelText: 'Heimzuschauer (erwartet)'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: awaySupportersController,
-                    decoration: const InputDecoration(labelText: 'Gastzuschauer (erwartet)'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: eventLeaderController,
-                    decoration: const InputDecoration(labelText: 'Einsatzleiter'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: eventLeaderPhoneController,
-                    decoration: const InputDecoration(labelText: 'Telefon (Einsatzleiter)'),
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: eventLeaderEmailController,
-                    decoration: const InputDecoration(labelText: 'E-Mail (Einsatzleiter)'),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: homeClubController,
-                    decoration: const InputDecoration(labelText: 'Heimverein'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: awayClubController,
-                    decoration: const InputDecoration(labelText: 'Gastverein'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(labelText: 'Beschreibung'),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Rollen zuweisen',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // List of checkboxes for roles
-                  Column(
-                    children: roles.map((role) {
-                      final int roleId = role['id'] as int;
-                      return CheckboxListTile(
-                        title: Text(role['name'] as String),
-                        value: selectedRoleIds.contains(roleId),
-                        onChanged: (bool? checked) {
-                          setStateDialog(() {
-                            if (checked == true) {
-                              if (!selectedRoleIds.contains(roleId)) {
-                                selectedRoleIds.add(roleId);
-                              }
-                            } else {
-                              selectedRoleIds.remove(roleId);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
+                  );
+                },
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    if (!isSaving) {
+                      Navigator.of(context).pop();
+                    }
+                  },
                   child: const Text('Abbrechen'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    final String name = nameController.text.trim();
-                    if (name.isEmpty || startDateTime == null || endDateTime == null) {
-                      return;
-                    }
-                    final String? securityCategory = securityCategoryController.text.trim().isEmpty
-                        ? null
-                        : securityCategoryController.text.trim();
-                    int? totalSpectators = totalSpectatorsController.text.trim().isEmpty
-                        ? null
-                        : int.tryParse(totalSpectatorsController.text.trim());
-                    int? homeSpectators = homeSupportersController.text.trim().isEmpty
-                        ? null
-                        : int.tryParse(homeSupportersController.text.trim());
-                    int? awaySpectators = awaySupportersController.text.trim().isEmpty
-                        ? null
-                        : int.tryParse(awaySupportersController.text.trim());
-                    final String? leader = eventLeaderController.text.trim().isEmpty
-                        ? null
-                        : eventLeaderController.text.trim();
-                    final String? leaderPhone = eventLeaderPhoneController.text.trim().isEmpty
-                        ? null
-                        : eventLeaderPhoneController.text.trim();
-                    final String? leaderEmail = eventLeaderEmailController.text.trim().isEmpty
-                        ? null
-                        : eventLeaderEmailController.text.trim();
-                    final String? homeClub = homeClubController.text.trim().isEmpty
-                        ? null
-                        : homeClubController.text.trim();
-                    final String? awayClub = awayClubController.text.trim().isEmpty
-                        ? null
-                        : awayClubController.text.trim();
-                    final String? description = descriptionController.text.trim().isEmpty
-                        ? null
-                        : descriptionController.text.trim();
-                    if (isEditing) {
-                      await DbService.updateEvent(
-                        id: event!['id'] as int,
-                        name: name,
-                        stadiumId: selectedStadiumId,
-                        startTime: startDateTime!,
-                        endTime: endDateTime!,
-                        securityCategory: securityCategory,
-                        expectedSpectatorsTotal: totalSpectators,
-                        expectedHomeSupporters: homeSpectators,
-                        expectedAwaySupporters: awaySpectators,
-                        eventLeader: leader,
-                        eventLeaderPhone: leaderPhone,
-                        eventLeaderEmail: leaderEmail,
-                        homeClub: homeClub,
-                        awayClub: awayClub,
-                        description: description,
-                        roleIds: List<int>.from(selectedRoleIds),
-                      );
-                    } else {
-                      await DbService.createEvent(
-                        name: name,
-                        stadiumId: selectedStadiumId,
-                        startTime: startDateTime!,
-                        endTime: endDateTime!,
-                        securityCategory: securityCategory,
-                        expectedSpectatorsTotal: totalSpectators,
-                        expectedHomeSupporters: homeSpectators,
-                        expectedAwaySupporters: awaySpectators,
-                        eventLeader: leader,
-                        eventLeaderPhone: leaderPhone,
-                        eventLeaderEmail: leaderEmail,
-                        homeClub: homeClub,
-                        awayClub: awayClub,
-                        description: description,
-                        roleIds: List<int>.from(selectedRoleIds),
-                      );
-                    }
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                      await _loadEvents();
-                    }
-                  },
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          // Basic validation
+                          final String name = nameController.text.trim();
+                          if (name.isEmpty || startDateTime == null || endDateTime == null) {
+                            return;
+                          }
+                          setStateDialog(() {
+                            isSaving = true;
+                          });
+                          final String? securityCategory = securityCategoryController.text.trim().isEmpty
+                              ? null
+                              : securityCategoryController.text.trim();
+                          final int? totalSpectators = totalSpectatorsController.text.trim().isEmpty
+                              ? null
+                              : int.tryParse(totalSpectatorsController.text.trim());
+                          final int? homeSpectators = homeSupportersController.text.trim().isEmpty
+                              ? null
+                              : int.tryParse(homeSupportersController.text.trim());
+                          final int? awaySpectators = awaySupportersController.text.trim().isEmpty
+                              ? null
+                              : int.tryParse(awaySupportersController.text.trim());
+                          final String? leader = eventLeaderController.text.trim().isEmpty
+                              ? null
+                              : eventLeaderController.text.trim();
+                          final String? leaderPhone = eventLeaderPhoneController.text.trim().isEmpty
+                              ? null
+                              : eventLeaderPhoneController.text.trim();
+                          final String? leaderEmail = eventLeaderEmailController.text.trim().isEmpty
+                              ? null
+                              : eventLeaderEmailController.text.trim();
+                          final String? homeClub = homeClubController.text.trim().isEmpty
+                              ? null
+                              : homeClubController.text.trim();
+                          final String? awayClub = awayClubController.text.trim().isEmpty
+                              ? null
+                              : awayClubController.text.trim();
+                          final String? description = descriptionController.text.trim().isEmpty
+                              ? null
+                              : descriptionController.text.trim();
+                          final String? otherInfo = otherInfoController.text.trim().isEmpty
+                              ? null
+                              : otherInfoController.text.trim();
+                          final int? numAreaLeaders = areaLeadersController.text.trim().isEmpty
+                              ? null
+                              : int.tryParse(areaLeadersController.text.trim());
+                          final int? numSecurity = securityController.text.trim().isEmpty
+                              ? null
+                              : int.tryParse(securityController.text.trim());
+                          DateTime? kickoffDateTime;
+                          if (kickoffTime != null && startDateTime != null) {
+                            kickoffDateTime = DateTime(
+                              startDateTime!.year,
+                              startDateTime!.month,
+                              startDateTime!.day,
+                              kickoffTime!.hour,
+                              kickoffTime!.minute,
+                            );
+                          }
+                          final int? matchdayParam = selectedCompetition == 'Regionalliga Nordost' ? selectedMatchday : null;
+                          if (isEditing) {
+                            await DbService.updateEvent(
+                              id: event!['id'] as int,
+                              name: name,
+                              stadiumId: selectedStadiumId,
+                              startTime: startDateTime!,
+                              endTime: endDateTime!,
+                              securityCategory: securityCategory,
+                              expectedSpectatorsTotal: totalSpectators,
+                              expectedHomeSupporters: homeSpectators,
+                              expectedAwaySupporters: awaySpectators,
+                              eventLeader: leader,
+                              eventLeaderPhone: leaderPhone,
+                              eventLeaderEmail: leaderEmail,
+                              homeClub: homeClub,
+                              awayClub: awayClub,
+                              description: description,
+                              season: selectedSeason,
+                              competition: selectedCompetition,
+                              matchday: matchdayParam,
+                              kickoffTime: kickoffDateTime,
+                              numAreaLeaders: numAreaLeaders,
+                              numSecurity: numSecurity,
+                              otherInfo: otherInfo,
+                              roleIds: List<int>.from(selectedRoleIds),
+                            );
+                          } else {
+                            await DbService.createEvent(
+                              name: name,
+                              stadiumId: selectedStadiumId,
+                              startTime: startDateTime!,
+                              endTime: endDateTime!,
+                              securityCategory: securityCategory,
+                              expectedSpectatorsTotal: totalSpectators,
+                              expectedHomeSupporters: homeSpectators,
+                              expectedAwaySupporters: awaySpectators,
+                              eventLeader: leader,
+                              eventLeaderPhone: leaderPhone,
+                              eventLeaderEmail: leaderEmail,
+                              homeClub: homeClub,
+                              awayClub: awayClub,
+                              description: description,
+                              season: selectedSeason,
+                              competition: selectedCompetition,
+                              matchday: matchdayParam,
+                              kickoffTime: kickoffDateTime,
+                              numAreaLeaders: numAreaLeaders,
+                              numSecurity: numSecurity,
+                              otherInfo: otherInfo,
+                              roleIds: List<int>.from(selectedRoleIds),
+                            );
+                          }
+                          if (mounted) {
+                            Navigator.of(context).pop();
+                            await _loadEvents();
+                          }
+                        },
                   child: const Text('Speichern'),
                 ),
               ],
@@ -355,9 +568,9 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
   }
 
   /// Formats a DateTime into a human‑friendly string of the form
-  /// `dd.MM.yyyy HH:mm`.  If [dt] is null, returns an empty string.
+  /// `dd.MM.yyyy HH:mm`.
   String _formatDateTime(DateTime dt) {
-    final twoDigits = (int n) => n.toString().padLeft(2, '0');
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
     final day = twoDigits(dt.day);
     final month = twoDigits(dt.month);
     final year = dt.year.toString();
@@ -375,8 +588,7 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
   /// Builds a list view for a given set of events.  Each item shows the
   /// event name and its date range.  Tapping an item opens a small details
   /// dialog; edit and delete icons allow modification or removal.
-  Widget _buildEventList(List<Map<String, dynamic>> events,
-      {bool shrinkWrap = false}) {
+  Widget _buildEventList(List<Map<String, dynamic>> events, {bool shrinkWrap = false}) {
     return ListView.separated(
       shrinkWrap: shrinkWrap,
       physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
@@ -426,6 +638,14 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
               children: [
                 Text('Zeitraum: ${_formatDateTime(start)} – ${_formatDateTime(end)}'),
                 const SizedBox(height: 8),
+                if (ev['season'] != null && (ev['season'] as String).isNotEmpty)
+                  Text('Saison: ${ev['season']}'),
+                if (ev['competition'] != null && (ev['competition'] as String).isNotEmpty)
+                  Text('Wettbewerb: ${ev['competition']}'),
+                if (ev['matchday'] != null)
+                  Text('Spieltag: ${ev['matchday']}'),
+                if (ev['kickoff_time'] != null)
+                  Text('Anstoß: ${_formatDateTime(ev['kickoff_time'] as DateTime)}'),
                 if (ev['stadium_name'] != null && (ev['stadium_name'] as String).isNotEmpty)
                   Text('Stadion: ${ev['stadium_name']}'),
                 if (ev['home_club'] != null && (ev['home_club'] as String).isNotEmpty)
@@ -440,6 +660,10 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                   Text('Heimzuschauer: ${ev['expected_home_supporters']}'),
                 if (ev['expected_away_supporters'] != null)
                   Text('Gastzuschauer: ${ev['expected_away_supporters']}'),
+                if (ev['num_area_leaders'] != null)
+                  Text('Bereichsleiter: ${ev['num_area_leaders']}'),
+                if (ev['num_security'] != null)
+                  Text('Security: ${ev['num_security']}'),
                 if (ev['event_leader'] != null && (ev['event_leader'] as String).isNotEmpty)
                   Text('Einsatzleiter: ${ev['event_leader']}'),
                 if (ev['event_leader_phone'] != null && (ev['event_leader_phone'] as String).isNotEmpty)
@@ -450,6 +674,11 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text('Beschreibung: ${ev['description']}'),
+                  ),
+                if (ev['other_info'] != null && (ev['other_info'] as String).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text('Sonstige Informationen: ${ev['other_info']}'),
                   ),
               ],
             ),

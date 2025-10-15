@@ -423,7 +423,9 @@ class DbService {
         'e.start_time, e.end_time, e.security_category, '
         'e.expected_spectators_total, e.expected_home_supporters, '
         'e.expected_away_supporters, e.event_leader, e.event_leader_phone, '
-        'e.event_leader_email, e.home_club, e.away_club, e.description '
+        'e.event_leader_email, e.home_club, e.away_club, e.description, '
+        'e.season, e.competition, e.matchday, e.kickoff_time, '
+        'e.num_area_leaders, e.num_security, e.other_info '
         'FROM events e LEFT JOIN stadiums s ON e.stadium_id = s.id '
         'ORDER BY e.start_time DESC',
       );
@@ -446,6 +448,13 @@ class DbService {
           'home_club': row['home_club'] as String?,
           'away_club': row['away_club'] as String?,
           'description': row['description'] as String?,
+          'season': row['season'] as String?,
+          'competition': row['competition'] as String?,
+          'matchday': row['matchday'] as int?,
+          'kickoff_time': row['kickoff_time'] as DateTime?,
+          'num_area_leaders': row['num_area_leaders'] as int?,
+          'num_security': row['num_security'] as int?,
+          'other_info': row['other_info'] as String?,
         });
       }
       return events;
@@ -475,6 +484,13 @@ class DbService {
     String? homeClub,
     String? awayClub,
     String? description,
+    String? season,
+    String? competition,
+    int? matchday,
+    DateTime? kickoffTime,
+    int? numAreaLeaders,
+    int? numSecurity,
+    String? otherInfo,
     List<int>? roleIds,
   }) async {
     final conn = await _connect();
@@ -483,8 +499,9 @@ class DbService {
         'INSERT INTO events '
         '(name, stadium_id, start_time, end_time, security_category, '
         'expected_spectators_total, expected_home_supporters, expected_away_supporters, '
-        'event_leader, event_leader_phone, event_leader_email, home_club, away_club, description) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'event_leader, event_leader_phone, event_leader_email, home_club, away_club, description, '
+        'season, competition, matchday, kickoff_time, num_area_leaders, num_security, other_info) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           name,
           stadiumId,
@@ -500,6 +517,13 @@ class DbService {
           homeClub,
           awayClub,
           description,
+          season,
+          competition,
+          matchday,
+          kickoffTime,
+          numAreaLeaders,
+          numSecurity,
+          otherInfo,
         ],
       );
       final int eventId = result.insertId ?? 0;
@@ -537,6 +561,13 @@ class DbService {
     String? homeClub,
     String? awayClub,
     String? description,
+    String? season,
+    String? competition,
+    int? matchday,
+    DateTime? kickoffTime,
+    int? numAreaLeaders,
+    int? numSecurity,
+    String? otherInfo,
     List<int>? roleIds,
   }) async {
     final conn = await _connect();
@@ -545,7 +576,9 @@ class DbService {
         'UPDATE events SET name = ?, stadium_id = ?, start_time = ?, end_time = ?, '
         'security_category = ?, expected_spectators_total = ?, expected_home_supporters = ?, '
         'expected_away_supporters = ?, event_leader = ?, event_leader_phone = ?, '
-        'event_leader_email = ?, home_club = ?, away_club = ?, description = ? '
+        'event_leader_email = ?, home_club = ?, away_club = ?, description = ?, '
+        'season = ?, competition = ?, matchday = ?, kickoff_time = ?, num_area_leaders = ?, '
+        'num_security = ?, other_info = ? '
         'WHERE id = ?',
         [
           name,
@@ -562,6 +595,13 @@ class DbService {
           homeClub,
           awayClub,
           description,
+          season,
+          competition,
+          matchday,
+          kickoffTime,
+          numAreaLeaders,
+          numSecurity,
+          otherInfo,
           id,
         ],
       );
