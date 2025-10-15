@@ -12,7 +12,6 @@ dependencies:
   mysql1: ^0.20.0
   crypto: ^3.0.1
   http: ^0.13.5
-  # file_picker: 6.2.1
   firebase_core: ^4.1.1
   firebase_storage: ^13.0.2
   pdfrx: ^2.1.25
