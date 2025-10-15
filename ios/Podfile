@@ -27,10 +27,11 @@ end
 require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper.rb'))
 
 target 'Runner' do
-  flutter_application_path = File.expand_path('..')
-  eval(File.read(File.join(flutter_application_path, '.flutter-plugins-dependencies')), binding)
-
   flutter_ios_podfile_setup
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
