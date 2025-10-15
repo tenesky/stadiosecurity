@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- 🔹 Privacy Usage Descriptions für App Store Review -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Diese App benötigt Zugriff auf deine Fotos, um Dateien auswählen und hochladen zu können.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Diese App benötigt Zugriff auf die Kamera, um Bilder direkt aufnehmen und hochladen zu können.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Diese App benötigt Zugriff auf das Mikrofon, um Audio aufnehmen zu können.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Diese App benötigt Zugriff auf deine Dateien, um Dokumente auszuwählen und hochzuladen.</string>
 </dict>
 </plist>
