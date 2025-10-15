@@ -56,18 +56,9 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
     final TextEditingController eventLeaderController = TextEditingController(text: event?['event_leader'] ?? '');
     final TextEditingController eventLeaderPhoneController = TextEditingController(text: event?['event_leader_phone'] ?? '');
     final TextEditingController eventLeaderEmailController = TextEditingController(text: event?['event_leader_email'] ?? '');
-    // Not used anymore: home/away club and description have been removed from the event model.
-    // Instead, provide a controller for the number of security staff.
-    final TextEditingController securityStaffController =
-        TextEditingController(text: event?['security_staff_count']?.toString() ?? '');
-
-    // Drop-down data for season and competition.  Seasons are listed
-    // explicitly with the current (latest) season first.  Competitions
-    // reflect the specified football leagues and match types.
-    final List<String> seasons = ['2023/24', '2024/25', '2025/26'];
-    String selectedSeason = event?['season'] as String? ?? '2025/26';
-    final List<String> competitions = ['Regionalliga Nordost', 'Sachsenpokal', 'Freundschaftsspiel'];
-    String selectedCompetition = event?['competition'] as String? ?? competitions.first;
+    final TextEditingController homeClubController = TextEditingController(text: event?['home_club'] ?? '');
+    final TextEditingController awayClubController = TextEditingController(text: event?['away_club'] ?? '');
+    final TextEditingController descriptionController = TextEditingController(text: event?['description'] ?? '');
 
     // Date and time pickers use DateTime/TimeOfDay objects.  Initialise with
     // existing values when editing or sensible defaults when creating.
@@ -152,40 +143,6 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                     },
                   ),
                   const SizedBox(height: 8),
-                  // Season selection
-                  DropdownButtonFormField<String>(
-                    value: selectedSeason,
-                    decoration: const InputDecoration(labelText: 'Saison'),
-                    items: seasons
-                        .map((season) => DropdownMenuItem<String>(
-                              value: season,
-                              child: Text(season),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setStateDialog(() => selectedSeason = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  // Competition selection
-                  DropdownButtonFormField<String>(
-                    value: selectedCompetition,
-                    decoration: const InputDecoration(labelText: 'Wettbewerb'),
-                    items: competitions
-                        .map((comp) => DropdownMenuItem<String>(
-                              value: comp,
-                              child: Text(comp),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setStateDialog(() => selectedCompetition = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
                   // Start time picker
                   Row(
                     children: [
@@ -257,9 +214,19 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: securityStaffController,
-                    decoration: const InputDecoration(labelText: 'Anzahl Security'),
-                    keyboardType: TextInputType.number,
+                    controller: homeClubController,
+                    decoration: const InputDecoration(labelText: 'Heimverein'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: awayClubController,
+                    decoration: const InputDecoration(labelText: 'Gastverein'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(labelText: 'Beschreibung'),
+                    maxLines: 3,
                   ),
                   const SizedBox(height: 16),
                   Align(
@@ -325,9 +292,15 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                     final String? leaderEmail = eventLeaderEmailController.text.trim().isEmpty
                         ? null
                         : eventLeaderEmailController.text.trim();
-                    int? securityStaff = securityStaffController.text.trim().isEmpty
+                    final String? homeClub = homeClubController.text.trim().isEmpty
                         ? null
-                        : int.tryParse(securityStaffController.text.trim());
+                        : homeClubController.text.trim();
+                    final String? awayClub = awayClubController.text.trim().isEmpty
+                        ? null
+                        : awayClubController.text.trim();
+                    final String? description = descriptionController.text.trim().isEmpty
+                        ? null
+                        : descriptionController.text.trim();
                     if (isEditing) {
                       await DbService.updateEvent(
                         id: event!['id'] as int,
@@ -342,9 +315,9 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                         eventLeader: leader,
                         eventLeaderPhone: leaderPhone,
                         eventLeaderEmail: leaderEmail,
-                        securityStaffCount: securityStaff,
-                        season: selectedSeason,
-                        competition: selectedCompetition,
+                        homeClub: homeClub,
+                        awayClub: awayClub,
+                        description: description,
                         roleIds: List<int>.from(selectedRoleIds),
                       );
                     } else {
@@ -360,9 +333,9 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                         eventLeader: leader,
                         eventLeaderPhone: leaderPhone,
                         eventLeaderEmail: leaderEmail,
-                        securityStaffCount: securityStaff,
-                        season: selectedSeason,
-                        competition: selectedCompetition,
+                        homeClub: homeClub,
+                        awayClub: awayClub,
+                        description: description,
                         roleIds: List<int>.from(selectedRoleIds),
                       );
                     }
@@ -455,26 +428,29 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                 const SizedBox(height: 8),
                 if (ev['stadium_name'] != null && (ev['stadium_name'] as String).isNotEmpty)
                   Text('Stadion: ${ev['stadium_name']}'),
-                if (ev['season'] != null && (ev['season'] as String).isNotEmpty)
-                  Text('Saison: ${ev['season']}'),
-                if (ev['competition'] != null && (ev['competition'] as String).isNotEmpty)
-                  Text('Wettbewerb: ${ev['competition']}'),
+                if (ev['home_club'] != null && (ev['home_club'] as String).isNotEmpty)
+                  Text('Heim: ${ev['home_club']}'),
+                if (ev['away_club'] != null && (ev['away_club'] as String).isNotEmpty)
+                  Text('Gast: ${ev['away_club']}'),
                 if (ev['security_category'] != null && (ev['security_category'] as String).isNotEmpty)
                   Text('Sicherheitskategorie: ${ev['security_category']}'),
                 if (ev['expected_spectators_total'] != null)
-                  Text('Gesamtzuschauer: ${ev['expected_spectators_total']}'),
+                  Text('Erwartete Zuschauer: ${ev['expected_spectators_total']}'),
                 if (ev['expected_home_supporters'] != null)
-                  Text('Zuschauer Heim: ${ev['expected_home_supporters']}'),
+                  Text('Heimzuschauer: ${ev['expected_home_supporters']}'),
                 if (ev['expected_away_supporters'] != null)
-                  Text('Zuschauer Gast: ${ev['expected_away_supporters']}'),
+                  Text('Gastzuschauer: ${ev['expected_away_supporters']}'),
                 if (ev['event_leader'] != null && (ev['event_leader'] as String).isNotEmpty)
                   Text('Einsatzleiter: ${ev['event_leader']}'),
                 if (ev['event_leader_phone'] != null && (ev['event_leader_phone'] as String).isNotEmpty)
-                  Text('Telefon Einsatzleiter: ${ev['event_leader_phone']}'),
+                  Text('Telefon: ${ev['event_leader_phone']}'),
                 if (ev['event_leader_email'] != null && (ev['event_leader_email'] as String).isNotEmpty)
-                  Text('E-Mail Einsatzleiter: ${ev['event_leader_email']}'),
-                if (ev['security_staff_count'] != null)
-                  Text('Anzahl Security: ${ev['security_staff_count']}'),
+                  Text('E-Mail: ${ev['event_leader_email']}'),
+                if (ev['description'] != null && (ev['description'] as String).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text('Beschreibung: ${ev['description']}'),
+                  ),
               ],
             ),
           ),
