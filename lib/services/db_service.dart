@@ -406,213 +406,6 @@ class DbService {
     }
   }
 
-  // --------------------------------------------------------------------------
-  // Event related methods
-
-  /// Retrieves all events along with their associated stadium names.  Each
-  /// returned map contains id, name, stadium_id, stadium_name,
-  /// start_time, end_time and various optional metadata fields such as
-  /// security_category, expected spectator counts, event leader contact
-  /// details, participating clubs and a free‑text description.  Events
-  /// are ordered by start time in descending order (most recent first).
-  static Future<List<Map<String, dynamic>>> getEvents() async {
-    final conn = await _connect();
-    try {
-      final results = await conn.query(
-        'SELECT e.id, e.name, e.stadium_id, s.name AS stadium_name, '
-        'e.start_time, e.end_time, e.security_category, '
-        'e.expected_spectators_total, e.expected_home_supporters, '
-        'e.expected_away_supporters, e.event_leader, e.event_leader_phone, '
-        'e.event_leader_email, e.home_club, e.away_club, e.description '
-        'FROM events e LEFT JOIN stadiums s ON e.stadium_id = s.id '
-        'ORDER BY e.start_time DESC',
-      );
-      final events = <Map<String, dynamic>>[];
-      for (final row in results) {
-        events.add({
-          'id': row['id'] as int,
-          'name': row['name'] as String,
-          'stadium_id': row['stadium_id'] as int?,
-          'stadium_name': row['stadium_name'] as String?,
-          'start_time': row['start_time'] as DateTime,
-          'end_time': row['end_time'] as DateTime,
-          'security_category': row['security_category'] as String?,
-          'expected_spectators_total': row['expected_spectators_total'] as int?,
-          'expected_home_supporters': row['expected_home_supporters'] as int?,
-          'expected_away_supporters': row['expected_away_supporters'] as int?,
-          'event_leader': row['event_leader'] as String?,
-          'event_leader_phone': row['event_leader_phone'] as String?,
-          'event_leader_email': row['event_leader_email'] as String?,
-          'home_club': row['home_club'] as String?,
-          'away_club': row['away_club'] as String?,
-          'description': row['description'] as String?,
-        });
-      }
-      return events;
-    } finally {
-      await conn.close();
-    }
-  }
-
-  /// Creates a new event and returns its id.  Various optional
-  /// parameters allow specifying a stadium, security category,
-  /// spectator estimates, leader contact information, participating
-  /// clubs and an arbitrary description.  A list of role ids may be
-  /// provided to associate roles with the event via the event_roles
-  /// junction table.
-  static Future<int> createEvent({
-    required String name,
-    int? stadiumId,
-    required DateTime startTime,
-    required DateTime endTime,
-    String? securityCategory,
-    int? expectedSpectatorsTotal,
-    int? expectedHomeSupporters,
-    int? expectedAwaySupporters,
-    String? eventLeader,
-    String? eventLeaderPhone,
-    String? eventLeaderEmail,
-    String? homeClub,
-    String? awayClub,
-    String? description,
-    List<int>? roleIds,
-  }) async {
-    final conn = await _connect();
-    try {
-      final result = await conn.query(
-        'INSERT INTO events '
-        '(name, stadium_id, start_time, end_time, security_category, '
-        'expected_spectators_total, expected_home_supporters, expected_away_supporters, '
-        'event_leader, event_leader_phone, event_leader_email, home_club, away_club, description) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          name,
-          stadiumId,
-          startTime,
-          endTime,
-          securityCategory,
-          expectedSpectatorsTotal,
-          expectedHomeSupporters,
-          expectedAwaySupporters,
-          eventLeader,
-          eventLeaderPhone,
-          eventLeaderEmail,
-          homeClub,
-          awayClub,
-          description,
-        ],
-      );
-      final int eventId = result.insertId ?? 0;
-      if (roleIds != null) {
-        for (final roleId in roleIds) {
-          await conn.query(
-            'INSERT INTO event_roles (event_id, role_id) VALUES (?, ?)',
-            [eventId, roleId],
-          );
-        }
-      }
-      return eventId;
-    } finally {
-      await conn.close();
-    }
-  }
-
-  /// Updates an existing event identified by [id].  All properties of the
-  /// event, including optional fields, can be modified.  Existing
-  /// role assignments are cleared and replaced with the provided list of
-  /// [roleIds].  Pass an empty list to remove all roles.
-  static Future<void> updateEvent({
-    required int id,
-    required String name,
-    int? stadiumId,
-    required DateTime startTime,
-    required DateTime endTime,
-    String? securityCategory,
-    int? expectedSpectatorsTotal,
-    int? expectedHomeSupporters,
-    int? expectedAwaySupporters,
-    String? eventLeader,
-    String? eventLeaderPhone,
-    String? eventLeaderEmail,
-    String? homeClub,
-    String? awayClub,
-    String? description,
-    List<int>? roleIds,
-  }) async {
-    final conn = await _connect();
-    try {
-      await conn.query(
-        'UPDATE events SET name = ?, stadium_id = ?, start_time = ?, end_time = ?, '
-        'security_category = ?, expected_spectators_total = ?, expected_home_supporters = ?, '
-        'expected_away_supporters = ?, event_leader = ?, event_leader_phone = ?, '
-        'event_leader_email = ?, home_club = ?, away_club = ?, description = ? '
-        'WHERE id = ?',
-        [
-          name,
-          stadiumId,
-          startTime,
-          endTime,
-          securityCategory,
-          expectedSpectatorsTotal,
-          expectedHomeSupporters,
-          expectedAwaySupporters,
-          eventLeader,
-          eventLeaderPhone,
-          eventLeaderEmail,
-          homeClub,
-          awayClub,
-          description,
-          id,
-        ],
-      );
-      // Remove existing role assignments
-      await conn.query('DELETE FROM event_roles WHERE event_id = ?', [id]);
-      // Reassign roles
-      if (roleIds != null) {
-        for (final roleId in roleIds) {
-          await conn.query(
-            'INSERT INTO event_roles (event_id, role_id) VALUES (?, ?)',
-            [id, roleId],
-          );
-        }
-      }
-    } finally {
-      await conn.close();
-    }
-  }
-
-  /// Deletes an event and its role assignments.  All entries in
-  /// event_roles referencing this event are removed prior to deleting
-  /// the event itself to satisfy foreign key constraints.
-  static Future<void> deleteEvent(int eventId) async {
-    final conn = await _connect();
-    try {
-      await conn.query('DELETE FROM event_roles WHERE event_id = ?', [eventId]);
-      await conn.query('DELETE FROM events WHERE id = ?', [eventId]);
-    } finally {
-      await conn.close();
-    }
-  }
-
-  /// Retrieves a list of role ids associated with the given event.  If
-  /// no roles are assigned, an empty list is returned.
-  static Future<List<int>> getEventRoleIds(int eventId) async {
-    final conn = await _connect();
-    try {
-      final results = await conn.query(
-        'SELECT role_id FROM event_roles WHERE event_id = ?',
-        [eventId],
-      );
-      final ids = <int>[];
-      for (final row in results) {
-        ids.add(row['role_id'] as int);
-      }
-      return ids;
-    } finally {
-      await conn.close();
-    }
-  }
-
   /// Updates an existing stadium's basic fields (not plans).  To update
   /// plans, call [addStadiumMap] and [deleteStadiumMap].
   static Future<void> updateStadium({
@@ -979,6 +772,213 @@ class DbService {
       } catch (_) {}
     }
     return null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Event related methods
+
+  /// Retrieves all events along with their associated stadium names.  Each
+  /// returned map contains id, name, stadium_id, stadium_name, start_time,
+  /// end_time and various optional metadata fields such as security category,
+  /// expected spectator counts, event leader contact details, security staff
+  /// count, season and competition.  Events are ordered by start time in
+  /// descending order (most recent first).
+  static Future<List<Map<String, dynamic>>> getEvents() async {
+    final conn = await _connect();
+    try {
+      final results = await conn.query(
+        'SELECT e.id, e.name, e.stadium_id, s.name AS stadium_name, '
+        'e.start_time, e.end_time, e.security_category, '
+        'e.expected_spectators_total, e.expected_home_supporters, '
+        'e.expected_away_supporters, e.event_leader, e.event_leader_phone, '
+        'e.event_leader_email, e.security_staff_count, e.season, e.competition '
+        'FROM events e LEFT JOIN stadiums s ON e.stadium_id = s.id '
+        'ORDER BY e.start_time DESC',
+      );
+      final events = <Map<String, dynamic>>[];
+      for (final row in results) {
+        events.add({
+          'id': row['id'] as int,
+          'name': row['name'] as String,
+          'stadium_id': row['stadium_id'] as int?,
+          'stadium_name': row['stadium_name'] as String?,
+          'start_time': row['start_time'] as DateTime,
+          'end_time': row['end_time'] as DateTime,
+          'security_category': row['security_category'] as String?,
+          'expected_spectators_total': row['expected_spectators_total'] as int?,
+          'expected_home_supporters': row['expected_home_supporters'] as int?,
+          'expected_away_supporters': row['expected_away_supporters'] as int?,
+          'event_leader': row['event_leader'] as String?,
+          'event_leader_phone': row['event_leader_phone'] as String?,
+          'event_leader_email': row['event_leader_email'] as String?,
+          'security_staff_count': row['security_staff_count'] as int?,
+          'season': row['season'] as String?,
+          'competition': row['competition'] as String?,
+        });
+      }
+      return events;
+    } finally {
+      await conn.close();
+    }
+  }
+
+  /// Creates a new event and returns its id.  Various optional parameters allow
+  /// specifying a stadium, security category, spectator estimates, leader
+  /// contact information, number of security staff, season and competition.
+  /// A list of role ids may be provided to associate roles with the event via
+  /// the event_roles junction table.
+  static Future<int> createEvent({
+    required String name,
+    int? stadiumId,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? securityCategory,
+    int? expectedSpectatorsTotal,
+    int? expectedHomeSupporters,
+    int? expectedAwaySupporters,
+    String? eventLeader,
+    String? eventLeaderPhone,
+    String? eventLeaderEmail,
+    int? securityStaffCount,
+    required String season,
+    required String competition,
+    List<int>? roleIds,
+  }) async {
+    final conn = await _connect();
+    try {
+      final result = await conn.query(
+        'INSERT INTO events '
+        '(name, stadium_id, start_time, end_time, security_category, '
+        'expected_spectators_total, expected_home_supporters, expected_away_supporters, '
+        'event_leader, event_leader_phone, event_leader_email, security_staff_count, '
+        'season, competition) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          name,
+          stadiumId,
+          startTime,
+          endTime,
+          securityCategory,
+          expectedSpectatorsTotal,
+          expectedHomeSupporters,
+          expectedAwaySupporters,
+          eventLeader,
+          eventLeaderPhone,
+          eventLeaderEmail,
+          securityStaffCount,
+          season,
+          competition,
+        ],
+      );
+      final int eventId = result.insertId ?? 0;
+      if (roleIds != null) {
+        for (final roleId in roleIds) {
+          await conn.query(
+            'INSERT INTO event_roles (event_id, role_id) VALUES (?, ?)',
+            [eventId, roleId],
+          );
+        }
+      }
+      return eventId;
+    } finally {
+      await conn.close();
+    }
+  }
+
+  /// Updates an existing event identified by [id].  All properties of the
+  /// event, including optional fields, can be modified.  Existing role
+  /// assignments are cleared and replaced with the provided list of [roleIds].
+  /// Pass an empty list to remove all roles.
+  static Future<void> updateEvent({
+    required int id,
+    required String name,
+    int? stadiumId,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? securityCategory,
+    int? expectedSpectatorsTotal,
+    int? expectedHomeSupporters,
+    int? expectedAwaySupporters,
+    String? eventLeader,
+    String? eventLeaderPhone,
+    String? eventLeaderEmail,
+    int? securityStaffCount,
+    required String season,
+    required String competition,
+    List<int>? roleIds,
+  }) async {
+    final conn = await _connect();
+    try {
+      await conn.query(
+        'UPDATE events SET name = ?, stadium_id = ?, start_time = ?, end_time = ?, '
+        'security_category = ?, expected_spectators_total = ?, expected_home_supporters = ?, '
+        'expected_away_supporters = ?, event_leader = ?, event_leader_phone = ?, '
+        'event_leader_email = ?, security_staff_count = ?, season = ?, competition = ? '
+        'WHERE id = ?',
+        [
+          name,
+          stadiumId,
+          startTime,
+          endTime,
+          securityCategory,
+          expectedSpectatorsTotal,
+          expectedHomeSupporters,
+          expectedAwaySupporters,
+          eventLeader,
+          eventLeaderPhone,
+          eventLeaderEmail,
+          securityStaffCount,
+          season,
+          competition,
+          id,
+        ],
+      );
+      // Remove existing role assignments
+      await conn.query('DELETE FROM event_roles WHERE event_id = ?', [id]);
+      // Reassign roles
+      if (roleIds != null) {
+        for (final roleId in roleIds) {
+          await conn.query(
+            'INSERT INTO event_roles (event_id, role_id) VALUES (?, ?)',
+            [id, roleId],
+          );
+        }
+      }
+    } finally {
+      await conn.close();
+    }
+  }
+
+  /// Deletes an event and its role assignments.  All entries in event_roles
+  /// referencing this event are removed prior to deleting the event itself
+  /// to satisfy foreign key constraints.
+  static Future<void> deleteEvent(int eventId) async {
+    final conn = await _connect();
+    try {
+      await conn.query('DELETE FROM event_roles WHERE event_id = ?', [eventId]);
+      await conn.query('DELETE FROM events WHERE id = ?', [eventId]);
+    } finally {
+      await conn.close();
+    }
+  }
+
+  /// Retrieves a list of role ids associated with the given event.  If
+  /// no roles are assigned, an empty list is returned.
+  static Future<List<int>> getEventRoleIds(int eventId) async {
+    final conn = await _connect();
+    try {
+      final results = await conn.query(
+        'SELECT role_id FROM event_roles WHERE event_id = ?',
+        [eventId],
+      );
+      final ids = <int>[];
+      for (final row in results) {
+        ids.add(row['role_id'] as int);
+      }
+      return ids;
+    } finally {
+      await conn.close();
+    }
   }
 
   /// Attempts to upload a file to Google Cloud Storage via the JSON

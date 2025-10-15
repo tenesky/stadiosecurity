@@ -5,7 +5,6 @@ import 'login_page.dart';
 import 'user_management_page.dart';
 import 'role_management_page.dart';
 import 'stadium_page.dart';
-import 'event_page.dart';
 
 /// The main application shell shown after a successful login.  It
 /// displays a responsive left navigation menu and a content area.
@@ -93,9 +92,6 @@ class _HomePageState extends State<HomePage> {
     }
     if (_selectedRoute == 'system_stadien') {
       return const StadiumPage();
-    }
-    if (_selectedRoute == 'system_veranstaltungen') {
-      return const EventPage();
     }
     if (_selectedRoute == 'profil_verwalten') {
       return const PlaceholderPage(title: 'Profil verwalten');
