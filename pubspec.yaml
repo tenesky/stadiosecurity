@@ -12,7 +12,7 @@ dependencies:
   mysql1: ^0.20.0
   crypto: ^3.0.1
   http: ^0.13.5
-  file_picker: ^5.2.11   # nicht 6.x, die zickt mit alten SDKs
+  file_picker: ^5.2.11
   firebase_core: ^4.1.1
   firebase_storage: ^13.0.2
   pdfrx: ^2.1.25
@@ -22,9 +22,6 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
   flutter_test:
     sdk: flutter
-
-dependency_overrides:
-  win32: ^5.0.9   # erzwingt eine moderne Version, kompatibel mit file_picker
 
 flutter_icons:
   android: true
