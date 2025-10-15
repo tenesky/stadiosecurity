@@ -366,12 +366,12 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                             const SizedBox(height: 8),
                             TextField(
                               controller: homeClubController,
-                              decoration: const InputDecoration(labelText: 'Heimverein'),
+                              decoration: const InputDecoration(labelText: 'Heimverein*'),
                             ),
                             const SizedBox(height: 8),
                             TextField(
                               controller: awayClubController,
-                              decoration: const InputDecoration(labelText: 'Gastverein'),
+                              decoration: const InputDecoration(labelText: 'Gastverein*'),
                             ),
                             const SizedBox(height: 8),
                             TextField(
@@ -444,7 +444,21 @@ class _EventPageState extends State<EventPage> with SingleTickerProviderStateMix
                       : () async {
                           // Basic validation
                           final String name = nameController.text.trim();
-                          if (name.isEmpty || startDateTime == null || endDateTime == null) {
+                          // Validate required fields.  Season, competition, home and away
+                          // clubs, start/end times, kickoff time and at least one role are mandatory.
+                          if (name.isEmpty ||
+                              selectedSeason == null || selectedSeason!.isEmpty ||
+                              selectedCompetition == null || selectedCompetition!.isEmpty ||
+                              homeClubController.text.trim().isEmpty ||
+                              awayClubController.text.trim().isEmpty ||
+                              startDateTime == null || endDateTime == null ||
+                              kickoffTime == null ||
+                              selectedRoleIds.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Bitte fülle alle Pflichtfelder aus (mit * markiert).'),
+                              ),
+                            );
                             return;
                           }
                           setStateDialog(() {
